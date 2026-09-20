@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "LinkSus",
+  "version": "1.1",
+  "description": "Smart Phishing Detection — checks if the current website is safe or phishing using AI.",
+
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage"
+  ],
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "LinkSus — Phishing Detector"
+  },
+
+  "icons": {
+    "16":  "icon16.png",
+    "48":  "icon48.png",
+    "128": "icon128.png"
+  }
+}

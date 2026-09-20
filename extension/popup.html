@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LinkSus</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+
+        body {
+            width: 320px;
+            min-height: 180px;
+            background: radial-gradient(circle at top, #1f4037, #0f2027);
+            color: white;
+            padding: 20px;
+        }
+
+        /* ===== HEADER ===== */
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .header-icon { font-size: 22px; }
+        .header-text .title    { font-size: 16px; font-weight: 700; }
+        .header-text .subtitle { font-size: 10px; color: #888; margin-top: 1px; }
+
+        /* ===== AUTO DETECT TOGGLE ===== */
+        /* Sits in the header, pushed to the right */
+        .toggle-wrap {
+            margin-left: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .toggle-label {
+            font-size: 8px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* The actual toggle switch */
+        .toggle-switch {
+            position: relative;
+            width: 36px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+            position: absolute;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.15);
+            border-radius: 20px;
+            transition: 0.25s;
+        }
+
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            width: 14px; height: 14px;
+            left: 3px; bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.25s;
+        }
+
+        /* When checked: green track + slide knob right */
+        input:checked + .toggle-slider {
+            background: linear-gradient(135deg, #00c6ff, #0072ff);
+        }
+
+        input:checked + .toggle-slider::before {
+            transform: translateX(16px);
+        }
+
+        /* Auto-detect mode indicator bar */
+        .auto-mode-bar {
+            display: none;
+            background: rgba(0,198,255,0.1);
+            border: 1px solid rgba(0,198,255,0.2);
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 10px;
+            color: #00c6ff;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        .auto-mode-bar.visible { display: block; }
+
+        /* ===== URL BAR ===== */
+        .url-bar {
+            background: rgba(255,255,255,0.07);
+            border-radius: 8px;
+            padding: 9px 12px;
+            margin-bottom: 14px;
+            font-size: 11px;
+            color: #aaa;
+            word-break: break-all;
+            line-height: 1.4;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .url-bar .url-label {
+            font-size: 9px;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            margin-bottom: 4px;
+        }
+
+        /* ===== SCAN BUTTON ===== */
+        .scan-btn {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #00c6ff, #0072ff);
+            color: white;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-bottom: 14px;
+        }
+
+        .scan-btn:hover   { transform: scale(1.02); box-shadow: 0 4px 12px rgba(0,198,255,0.35); }
+        .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        /* ===== LOADING ===== */
+        .loading { display: none; text-align: center; padding: 10px 0; font-size: 12px; color: #888; }
+
+        .spinner {
+            width: 22px; height: 22px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: #00c6ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 8px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ===== RESULT ===== */
+        .result-box {
+            display: none;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+
+        .result-box.safe     { background: rgba(0,255,157,0.1); border: 1px solid rgba(0,255,157,0.25); }
+        .result-box.phishing { background: rgba(255,77,77,0.1); border: 1px solid rgba(255,77,77,0.25); }
+
+        .result-verdict { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+        .result-verdict.safe     { color: #00ff9d; }
+        .result-verdict.phishing { color: #ff4d4d; }
+
+        /* ===== GEMINI EXPLANATION ===== */
+        .ai-explanation {
+            font-size: 11.5px; color: #bbb; line-height: 1.55;
+            margin-bottom: 10px; padding-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.07);
+        }
+
+        .ai-label {
+            font-size: 9px; color: #555;
+            text-transform: uppercase; letter-spacing: 0.6px;
+            margin-bottom: 5px;
+            display: flex; align-items: center; gap: 5px;
+        }
+
+        .ai-badge {
+            background: rgba(66,133,244,0.2); color: #7eb3ff;
+            border: 1px solid rgba(66,133,244,0.3);
+            font-size: 8px; padding: 1px 5px;
+            border-radius: 6px; font-weight: 600;
+        }
+
+        /* ===== SHAP SIGNALS ===== */
+        .signals-title { font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 7px; }
+
+        .signal-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 5px 8px; border-radius: 6px;
+            background: rgba(255,255,255,0.04); margin-bottom: 4px;
+        }
+
+        .signal-name { font-size: 11px; color: #ccc; }
+
+        .signal-badge { font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
+        .badge-risk { background: rgba(255,77,77,0.2); color: #ff6b6b; border: 1px solid rgba(255,77,77,0.3); }
+        .badge-safe { background: rgba(0,255,157,0.12); color: #00ff9d; border: 1px solid rgba(0,255,157,0.25); }
+
+        /* ===== ERROR ===== */
+        .error-box {
+            display: none;
+            background: rgba(255,77,77,0.08);
+            border: 1px solid rgba(255,77,77,0.2);
+            border-radius: 8px; padding: 12px;
+            font-size: 11.5px; color: #ff9999; line-height: 1.5;
+        }
+
+        /* ===== FOOTER ===== */
+        .footer {
+            text-align: center; font-size: 9px; color: #333;
+            margin-top: 10px; padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER with toggle -->
+    <div class="header">
+        <div class="header-icon">🔗</div>
+        <div class="header-text">
+            <div class="title">LinkSus</div>
+            <div class="subtitle">Smart Phishing Detection</div>
+        </div>
+
+        <!-- AUTO DETECT TOGGLE — pushed to right via margin-left:auto on .toggle-wrap -->
+        <div class="toggle-wrap">
+            <span class="toggle-label">Auto</span>
+            <label class="toggle-switch">
+                <input type="checkbox" id="auto-toggle">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <!-- AUTO MODE INDICATOR BAR — shows when auto-detect is ON -->
+    <div class="auto-mode-bar" id="auto-mode-bar">
+        ⚡ Auto-detection ON — scanning on every page load
+    </div>
+
+    <!-- CURRENT URL -->
+    <div class="url-bar">
+        <div class="url-label">Current Page</div>
+        <div id="current-url">Loading...</div>
+    </div>
+
+    <!-- SCAN BUTTON (manual mode) -->
+    <button class="scan-btn" id="scan-btn">
+        🔍 Check This Website
+    </button>
+
+    <!-- LOADING -->
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        Analyzing URL...
+    </div>
+
+    <!-- RESULT -->
+    <div class="result-box" id="result-box">
+        <div class="result-verdict" id="result-verdict"></div>
+
+        <div class="ai-explanation" id="ai-explanation" style="display:none">
+            <div class="ai-label">
+                🤖 AI Explanation
+                <span class="ai-badge">Gemini 2.5 Flash</span>
+            </div>
+            <div id="ai-text"></div>
+        </div>
+
+        <div id="signals-section" style="display:none">
+            <div class="signals-title">📊 SHAP Feature Signals</div>
+            <div id="signals-list"></div>
+        </div>
+    </div>
+
+    <!-- ERROR -->
+    <div class="error-box" id="error-box"></div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+        Powered by ML + SHAP + Gemini AI &nbsp;·&nbsp; LinkSus v1.1
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LinkSus — Phishing Detection</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        /* ── RESET & BASE ── */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg:        #060d1f;
+            --surface:   #0a1628;
+            --surface2:  #0f1e35;
+            --border:    rgba(255,255,255,0.07);
+            --border-hi: rgba(0,212,255,0.3);
+            --cyan:      #00d4ff;
+            --cyan-dim:  rgba(0,212,255,0.12);
+            --cyan-glow: rgba(0,212,255,0.25);
+            --safe:      #10b981;
+            --safe-dim:  rgba(16,185,129,0.12);
+            --safe-glow: rgba(16,185,129,0.2);
+            --risk:      #ef4444;
+            --risk-dim:  rgba(239,68,68,0.12);
+            --risk-glow: rgba(239,68,68,0.2);
+            --amber:     #f59e0b;
+            --text-pri:  #f0f4ff;
+            --text-sec:  #7a8aaa;
+            --text-dim:  #3d4f6b;
+            --mono:      'JetBrains Mono', monospace;
+            --sans:      'Inter', sans-serif;
+            --radius:    14px;
+            --radius-sm: 8px;
+        }
+
+        body {
+            font-family: var(--sans);
+            background: var(--bg);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 48px 16px 64px;
+            color: var(--text-pri);
+            /* Subtle grid texture */
+            background-image:
+                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,212,255,0.08) 0%, transparent 60%),
+                linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
+        }
+
+        /* ── HEADER / BRAND ── */
+        .brand {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 40px;
+            gap: 10px;
+        }
+
+        .brand-lockup {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #0a2540, #0e3460);
+            border: 1px solid var(--border-hi);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 0 20px var(--cyan-glow);
+            flex-shrink: 0;
+        }
+
+        .brand-name {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #ffffff 30%, #00d4ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .brand-tagline {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-sec);
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+
+        .brand-powered {
+            font-size: 11px;
+            color: var(--text-sec);
+            letter-spacing: 0.3px;
+        }
+
+        /* ── MAIN CARD ── */
+        .card {
+            width: 100%;
+            max-width: 560px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03);
+        }
+
+        .card-body {
+            padding: 32px;
+        }
+
+        /* ── SCAN SECTION LABEL ── */
+        .section-label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1.8px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 12px;
+        }
+
+        /* ── URL INPUT ── */
+        .input-wrap {
+            position: relative;
+            margin-bottom: 12px;
+        }
+
+        .input-prefix {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text-dim);
+            pointer-events: none;
+            user-select: none;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 14px 14px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-pri);
+            font-family: var(--mono);
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--border-hi);
+            box-shadow: 0 0 0 3px var(--cyan-dim);
+        }
+
+        input[type="text"]::placeholder {
+            color: var(--text-dim);
+            font-family: var(--mono);
+        }
+
+        /* ── SCAN BUTTON ── */
+        button.scan-btn {
+            width: 100%;
+            padding: 13px;
+            border: none;
+            border-radius: var(--radius-sm);
+            background: linear-gradient(135deg, #0099cc, #0055bb);
+            color: white;
+            font-family: var(--sans);
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+            margin-bottom: 10px;
+            letter-spacing: 0.2px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button.scan-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.08), transparent);
+            pointer-events: none;
+        }
+
+        button.scan-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 24px rgba(0,153,204,0.4);
+        }
+
+        button.scan-btn:active:not(:disabled) { transform: translateY(0); }
+
+        button.scan-btn:disabled {
+            opacity: 0.5;
+            cursor: wait;
+            transform: none;
+        }
+
+        /* ── QR BUTTON ── */
+        button.qr-btn {
+            width: 100%;
+            padding: 11px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: transparent;
+            color: var(--text-sec);
+            font-family: var(--sans);
+            font-weight: 500;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        button.qr-btn:hover {
+            border-color: rgba(255,255,255,0.15);
+            color: var(--text-pri);
+            background: rgba(255,255,255,0.04);
+        }
+
+        /* ── DIVIDER ── */
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 24px 0;
+        }
+
+        /* ── RESULT VERDICT ── */
+        .result-verdict {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 18px 20px;
+            border-radius: var(--radius-sm);
+            margin-bottom: 16px;
+        }
+
+        .verdict-safe {
+            background: var(--safe-dim);
+            border: 1px solid rgba(16,185,129,0.25);
+        }
+
+        .verdict-bad {
+            background: var(--risk-dim);
+            border: 1px solid rgba(239,68,68,0.25);
+        }
+
+        .verdict-icon {
+            font-size: 22px;
+            flex-shrink: 0;
+            line-height: 1;
+        }
+
+        .verdict-text {
+            flex: 1;
+        }
+
+        .verdict-title {
+            font-size: 15px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .safe-color  { color: var(--safe); }
+        .risk-color  { color: var(--risk); }
+
+        .verdict-sub {
+            font-size: 11px;
+            color: var(--text-sec);
+            margin-top: 2px;
+            font-weight: 400;
+        }
+
+        /* ── GEMINI BOX ── */
+        .gemini-box {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 16px 18px;
+            margin-bottom: 12px;
+        }
+
+        .gemini-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .gemini-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-dim);
+            letter-spacing: 1.4px;
+            text-transform: uppercase;
+        }
+
+        .gemini-badge {
+            font-size: 9px;
+            padding: 2px 7px;
+            border-radius: 10px;
+            background: rgba(99,102,241,0.15);
+            color: #a5b4fc;
+            border: 1px solid rgba(99,102,241,0.25);
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .gemini-text {
+            font-size: 13px;
+            color: #9aabcc;
+            line-height: 1.7;
+        }
+
+        /* ── SHAP SIGNALS ── */
+        .explanation-box {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+        }
+
+        .explanation-title {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-dim);
+            letter-spacing: 1.4px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .explanation-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        .feature-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 10px;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            transition: background 0.15s;
+        }
+
+        .feature-row:last-of-type { margin-bottom: 0; }
+
+        .feature-row:hover { background: rgba(255,255,255,0.03); }
+
+        .feature-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .feature-icon {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            flex-shrink: 0;
+        }
+
+        .icon-phishing { background: var(--risk-dim); border: 1px solid rgba(239,68,68,0.3); }
+        .icon-safe     { background: var(--safe-dim); border: 1px solid rgba(16,185,129,0.25); }
+
+        .feature-name {
+            font-size: 12.5px;
+            color: #8a9cc0;
+            font-family: var(--mono);
+        }
+
+        .feature-badge {
+            font-size: 9px;
+            font-weight: 700;
+            padding: 2px 9px;
+            border-radius: 20px;
+            white-space: nowrap;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+        }
+
+        .badge-phishing { background: var(--risk-dim); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+        .badge-safe     { background: var(--safe-dim); color: #34d399; border: 1px solid rgba(16,185,129,0.25); }
+
+        .no-explanation {
+            font-size: 13px;
+            color: var(--text-dim);
+            text-align: center;
+            padding: 8px 0;
+        }
+
+        .shap-note {
+            font-size: 10px;
+            color: var(--text-dim);
+            text-align: center;
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+
+        /* ── LOADING STATE ── */
+        .scan-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            padding: 28px 0 8px;
+        }
+
+        .scan-loading-ring {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid var(--border);
+            border-top-color: var(--cyan);
+            animation: spin 0.75s linear infinite;
+        }
+
+        .scan-loading-text {
+            font-size: 12px;
+            color: var(--text-sec);
+            letter-spacing: 0.3px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── RESULT FADE-IN ── */
+        #results-container > * {
+            animation: fadeUp 0.3s ease both;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── CARD FOOTER ── */
+        .card-footer {
+            padding: 14px 32px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.15);
+        }
+
+        .footer-left {
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 0.3px;
+        }
+
+        .footer-right {
+            display: flex;
+            gap: 6px;
+        }
+
+        .footer-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--safe);
+            box-shadow: 0 0 6px var(--safe);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.4; }
+        }
+
+        .footer-status {
+            font-size: 10px;
+            color: var(--safe);
+            font-weight: 500;
+        }
+
+        /* ── QR MODAL ── */
+        .qr-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.88);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+        }
+
+        .qr-modal-overlay.active { display: flex; }
+
+        .qr-modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 28px 24px 24px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            color: var(--text-pri);
+            box-shadow: 0 24px 64px rgba(0,0,0,0.7);
+        }
+
+        .qr-modal-title {
+            font-size: 17px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .qr-modal-subtitle {
+            font-size: 12px;
+            color: var(--text-sec);
+            margin-bottom: 18px;
+        }
+
+        #qr-reader {
+            width: 100%;
+            min-height: 240px;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            background: #000;
+            margin-bottom: 12px;
+        }
+
+        #qr-status {
+            font-size: 12px;
+            color: var(--text-sec);
+            min-height: 18px;
+            margin: 8px 0 12px;
+        }
+
+        .qr-file-row {
+            margin-bottom: 10px;
+        }
+
+        .qr-file-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            width: 100%;
+            padding: 10px;
+            border: 1px dashed rgba(255,255,255,0.12);
+            border-radius: var(--radius-sm);
+            color: var(--text-sec);
+            font-size: 12px;
+            font-family: var(--sans);
+            cursor: pointer;
+            transition: all 0.2s;
+            background: transparent;
+        }
+
+        .qr-file-label:hover {
+            border-color: var(--border-hi);
+            color: var(--cyan);
+            background: var(--cyan-dim);
+        }
+
+        #qr-file-input { display: none; }
+
+        .qr-close-btn {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: transparent;
+            color: var(--text-sec);
+            font-family: var(--sans);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .qr-close-btn:hover {
+            border-color: rgba(255,255,255,0.15);
+            color: var(--text-pri);
+        }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 600px) {
+            body { padding: 24px 12px 48px; }
+            .brand { margin-bottom: 28px; }
+            .brand-name { font-size: 22px; }
+            .card-body { padding: 22px 18px; }
+            .card-footer { padding: 12px 18px; }
+        }
+
+        /* ── REDUCED MOTION ── */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- BRAND HEADER -->
+    <header class="brand">
+        <div class="brand-lockup">
+            <div class="brand-icon">🔗</div>
+            <div class="brand-name">LinkSus</div>
+        </div>
+        <div class="brand-tagline">Phishing Detection Engine</div>
+        <div class="brand-powered">
+            Powered by ML Model &amp; SHAP &nbsp;·&nbsp; Co-powered by Gemini
+        </div>
+    </header>
+
+    <!-- MAIN CARD -->
+    <div class="card">
+        <div class="card-body">
+
+            <div class="section-label">Analyze URL</div>
+
+            <form method="POST" action="/" id="scan-form">
+                <div class="input-wrap">
+                    <input type="text" name="url" id="url-input"
+                        placeholder="Enter the sus URL"
+                        value="{{ url_input }}" required autocomplete="off" spellcheck="false">
+                </div>
+                <button type="submit" class="scan-btn">Scan URL</button>
+            </form>
+
+            <button class="qr-btn" onclick="openQRScanner()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM17 17h3v3h-3zM14 20h3"/></svg>
+                Scan QR Code
+            </button>
+
+            <!-- RESULTS (Jinja + JS both target this) -->
+            <div id="results-container">
+            {% if result %}
+                <div class="divider"></div>
+
+                <!-- VERDICT -->
+                <div class="result-verdict {% if 'Safe' in result %}verdict-safe{% else %}verdict-bad{% endif %}">
+                    <div class="verdict-icon">{% if 'Safe' in result %}✅{% else %}⚠️{% endif %}</div>
+                    <div class="verdict-text">
+                        <div class="verdict-title {% if 'Safe' in result %}safe-color{% else %}risk-color{% endif %}">
+                            {{ result }}
+                        </div>
+                        <div class="verdict-sub">
+                            {% if 'Safe' in result %}No phishing indicators detected{% else %}Phishing signals identified — do not proceed{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GEMINI ANALYSIS -->
+                {% if gemini_text %}
+                <div class="gemini-box">
+                    <div class="gemini-header">
+                        <span class="gemini-label">AI Analysis</span>
+                        <span class="gemini-badge">Gemini</span>
+                    </div>
+                    <div class="gemini-text">{{ gemini_text }}</div>
+                </div>
+                {% endif %}
+
+                <!-- SHAP SIGNALS -->
+                {% if explanation %}
+                <div class="explanation-box">
+                    <div class="explanation-title">Signal Breakdown</div>
+                    {% for item in explanation %}
+                    <div class="feature-row">
+                        <div class="feature-left">
+                            <div class="feature-icon {% if item.direction == 'phishing' %}icon-phishing{% else %}icon-safe{% endif %}">
+                                {% if item.direction == 'phishing' %}⚠{% else %}✓{% endif %}
+                            </div>
+                            <span class="feature-name">{{ item.name }}</span>
+                        </div>
+                        <span class="feature-badge {% if item.direction == 'phishing' %}badge-phishing{% else %}badge-safe{% endif %}">
+                            {% if item.direction == 'phishing' %}Risk{% else %}Safe{% endif %}
+                        </span>
+                    </div>
+                    {% endfor %}
+                    <div class="shap-note">Powered by SHAP · shows which URL features drove this verdict</div>
+                </div>
+                {% else %}
+                <div class="explanation-box">
+                    <div class="no-explanation">No strong individual signals detected.</div>
+                </div>
+                {% endif %}
+
+            {% endif %}
+            </div>
+        </div>
+
+        <!-- CARD FOOTER -->
+        <div class="card-footer">
+            <div class="footer-left">LinkSus v1.1 &nbsp;·&nbsp; Powered by ML &amp; SHAP &nbsp;·&nbsp; Co-powered by Gemini</div>
+            <div class="footer-right">
+                <div class="footer-dot"></div>
+                <span class="footer-status">Engine online</span>
+            </div>
+        </div>
+    </div>
+
+<!-- QR MODAL -->
+<div class="qr-modal-overlay" id="qr-overlay">
+    <div class="qr-modal">
+        <div class="qr-modal-title">QR Scanner</div>
+        <div class="qr-modal-subtitle">Point camera at a QR code, or upload an image</div>
+        <div id="qr-reader"></div>
+        <div id="qr-status">Starting camera...</div>
+        <div class="qr-file-row">
+            <label class="qr-file-label" for="qr-file-input">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Upload QR image instead
+            </label>
+            <input type="file" id="qr-file-input" accept="image/*" onchange="handleImageUpload(event)">
+        </div>
+        <button class="qr-close-btn" onclick="closeQRScanner()">Close</button>
+    </div>
+</div>
+
+<script>
+let html5Qr = null;
+let qrHandled = false;
+
+function escapeHtml(str) {
+    const d = document.createElement("div");
+    d.textContent = str;
+    return d.innerHTML;
+}
+
+function renderResults(data) {
+    const isGood = data.prediction === "good";
+    const verdict = isGood ? "✅ Safe Website" : "⚠️ Phishing Website Detected";
+    const verdictClass = isGood ? "verdict-safe" : "verdict-bad";
+    const verdictTitleClass = isGood ? "safe-color" : "risk-color";
+    const verdictIcon = isGood ? "✅" : "⚠️";
+    const verdictSub = isGood
+        ? "No phishing indicators detected"
+        : "Phishing signals identified — do not proceed";
+
+    let html = `<div class="divider"></div>
+    <div class="result-verdict ${verdictClass}">
+        <div class="verdict-icon">${verdictIcon}</div>
+        <div class="verdict-text">
+            <div class="verdict-title ${verdictTitleClass}">${verdict}</div>
+            <div class="verdict-sub">${verdictSub}</div>
+        </div>
+    </div>`;
+
+    if (data.gemini_text) {
+        html += `
+        <div class="gemini-box">
+            <div class="gemini-header">
+                <span class="gemini-label">AI Analysis</span>
+                <span class="gemini-badge">Gemini</span>
+            </div>
+            <div class="gemini-text">${escapeHtml(data.gemini_text)}</div>
+        </div>`;
+    }
+
+    if (data.explanation && data.explanation.length > 0) {
+        html += `<div class="explanation-box"><div class="explanation-title">Signal Breakdown</div>`;
+        for (const item of data.explanation) {
+            const isPhish = item.direction === "phishing";
+            html += `
+            <div class="feature-row">
+                <div class="feature-left">
+                    <div class="feature-icon ${isPhish ? "icon-phishing" : "icon-safe"}">
+                        ${isPhish ? "⚠" : "✓"}
+                    </div>
+                    <span class="feature-name">${escapeHtml(item.name)}</span>
+                </div>
+                <span class="feature-badge ${isPhish ? "badge-phishing" : "badge-safe"}">
+                    ${isPhish ? "Risk" : "Safe"}
+                </span>
+            </div>`;
+        }
+        html += `<div class="shap-note">Powered by SHAP · shows which URL features drove this verdict</div></div>`;
+    } else {
+        html += `<div class="explanation-box"><div class="no-explanation">No strong individual signals detected.</div></div>`;
+    }
+
+    document.getElementById("results-container").innerHTML = html;
+}
+
+async function analyzeUrl(url) {
+    const scanBtn = document.querySelector("#scan-form .scan-btn");
+    const resultsEl = document.getElementById("results-container");
+
+    scanBtn.disabled = true;
+    scanBtn.textContent = "Analyzing…";
+    resultsEl.innerHTML = `
+        <div class="divider"></div>
+        <div class="scan-loading">
+            <div class="scan-loading-ring"></div>
+            <div class="scan-loading-text">Analyzing URL against ML model…</div>
+        </div>`;
+
+    try {
+        const res = await fetch("/api/check", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: url.trim() })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Scan failed");
+        renderResults(data);
+    } catch (err) {
+        resultsEl.innerHTML = `
+            <div class="divider"></div>
+            <div class="result-verdict verdict-bad">
+                <div class="verdict-icon">⚠️</div>
+                <div class="verdict-text">
+                    <div class="verdict-title risk-color">Connection Error</div>
+                    <div class="verdict-sub">${escapeHtml(err.message)}</div>
+                </div>
+            </div>`;
+    } finally {
+        scanBtn.disabled = false;
+        scanBtn.textContent = "Scan URL";
+    }
+}
+
+function onQrDecoded(decodedText) {
+    if (qrHandled) return;
+    qrHandled = true;
+
+    document.getElementById("url-input").value = decodedText;
+    document.getElementById("qr-status").textContent = "Scanned! Analyzing...";
+
+    const runAnalysis = () => {
+        closeQRScannerUI();
+        analyzeUrl(decodedText);
+    };
+
+    if (html5Qr) {
+        html5Qr.stop()
+            .then(() => { html5Qr.clear(); html5Qr = null; runAnalysis(); })
+            .catch(() => { html5Qr = null; runAnalysis(); });
+    } else {
+        runAnalysis();
+    }
+}
+
+function closeQRScannerUI() {
+    document.getElementById("qr-overlay").classList.remove("active");
+    const fi = document.getElementById("qr-file-input");
+    if (fi) fi.value = "";
+}
+
+document.getElementById("scan-form").addEventListener("submit", function(e) {
+    e.preventDefault();
+    const url = document.getElementById("url-input").value.trim();
+    if (!url) return;
+    analyzeUrl(url);
+});
+
+function openQRScanner() {
+    qrHandled = false;
+    document.getElementById("qr-overlay").classList.add("active");
+    document.getElementById("qr-status").textContent = "Starting camera...";
+
+    setTimeout(function() {
+        html5Qr = new Html5Qrcode("qr-reader");
+        html5Qr.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: 220 },
+            onQrDecoded,
+            function(errorMsg) { /* per-frame misses — ignore */ }
+        )
+        .then(function() {
+            document.getElementById("qr-status").textContent = "Point camera at a QR code...";
+        })
+        .catch(function(err) {
+            const msg = (err && err.message) ? err.message : String(err);
+            document.getElementById("qr-status").textContent = "Camera error: " + msg;
+        });
+    }, 100);
+}
+
+function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    document.getElementById("qr-status").textContent = "Reading image...";
+    Html5Qrcode.scanFile(file, true)
+        .then(onQrDecoded)
+        .catch(function() {
+            document.getElementById("qr-status").textContent = "Could not read QR code from image.";
+        });
+}
+
+function closeQRScanner() {
+    qrHandled = false;
+    closeQRScannerUI();
+    if (html5Qr) {
+        html5Qr.stop()
+            .then(function() { html5Qr.clear(); html5Qr = null; })
+            .catch(function() { html5Qr = null; });
+    }
+}
+</script>
+
+</body>
+</html>

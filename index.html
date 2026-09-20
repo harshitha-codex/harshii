@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LinkSus | Phishing Detection</title>
+    <style>
+      :root {
+        --bg: #08111f;
+        --panel: #101d31;
+        --panel-2: #132543;
+        --border: rgba(255,255,255,0.12);
+        --cyan: #4dd7ff;
+        --green: #3ee8a9;
+        --red: #ff6b6b;
+        --text: #eaf2ff;
+        --muted: #9bb1d1;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(circle at top, rgba(77, 215, 255, 0.15), transparent 40%), var(--bg);
+        color: var(--text);
+        font-family: Arial, Helvetica, sans-serif;
+      }
+      .card {
+        width: min(760px, 92vw);
+        background: rgba(16, 29, 49, 0.95);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 32px;
+        box-shadow: 0 25px 80px rgba(0,0,0,0.35);
+      }
+      .badge {
+        display: inline-block;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--cyan);
+        border: 1px solid rgba(77, 215, 255, 0.4);
+        background: rgba(77, 215, 255, 0.08);
+        padding: 8px 12px;
+        border-radius: 999px;
+      }
+      h1 {
+        margin: 24px 0 12px;
+        font-size: clamp(2.2rem, 4vw, 4rem);
+      }
+      p {
+        color: var(--muted);
+        line-height: 1.7;
+        font-size: 1.04rem;
+      }
+      .status {
+        margin-top: 26px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .pill {
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--panel-2);
+        color: var(--text);
+        font-weight: 600;
+      }
+      .pill.safe { border-color: rgba(62, 232, 169, 0.4); color: var(--green); }
+      .pill.warn { border-color: rgba(255, 107, 107, 0.35); color: var(--red); }
+      a.button {
+        display: inline-block;
+        margin-top: 26px;
+        padding: 12px 18px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #1aa7ff, #4f6dff);
+        color: white;
+        text-decoration: none;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="badge">GitHub Pages</div>
+      <h1>LinkSus</h1>
+      <p>
+        This project is a phishing detection system built with Python, Flask, and ML-based URL analysis.
+        GitHub Pages can host the public landing page, but the live phishing detector itself must run on a backend host because GitHub Pages does not support Python server execution.
+      </p>
+      <div class="status">
+        <span class="pill safe">Live frontend: GitHub Pages</span>
+        <span class="pill warn">Backend: Render / Railway / Azure</span>
+      </div>
+      <a class="button" href="https://github.com/harshitha-codex/harshitha-codex.github.io">Open GitHub repo</a>
+    </main>
+  </body>
+</html>
