@@ -1,0 +1,21 @@
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*.class
+
+# Secrets & Environment variables
+.env
+.env.local
+
+# Jupyter Checkpoints
+.ipynb_checkpoints/
+
+# OS metadata
+.DS_Store
+Thumbs.db

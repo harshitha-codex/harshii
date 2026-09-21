@@ -223,16 +223,18 @@ def get_gemini_explanation(url, prediction, shap_signals, free_host=False):
         return None
 
 
-def smart_predict(url):
+def smart_predict(url, return_source=False):
     cleaned = re.sub(r"^https?://(www\.)?", "", url.lower())
     domain = cleaned.split("/")[0]
 
     for safe in safe_domains:
         if domain == safe or domain.endswith("." + safe):
-            return "good", [], get_gemini_explanation(url, "good", [])
+            res = ("good", [], get_gemini_explanation(url, "good", []))
+            return res + ("Safe Domain Whitelist",) if return_source else res
 
     if is_free_host(domain):
-        return "bad", [], get_gemini_explanation(url, "bad", [], True)
+        res = ("bad", [], get_gemini_explanation(url, "bad", [], True))
+        return res + ("Suspicious Free-Host Heuristic",) if return_source else res
 
     text_vec = vectorizer.transform([cleaned])
     url_feat_raw = np.array([extract_features(cleaned)])
@@ -243,43 +245,413 @@ def smart_predict(url):
     shap_signals = get_shap_explanation(combined, url_feat_raw, prediction)
     gemini_text = get_gemini_explanation(url, prediction, shap_signals)
 
-    return prediction, shap_signals, gemini_text
+    res = (prediction, shap_signals, gemini_text)
+    return res + ("LinearSVC ML Model + SHAP",) if return_source else res
 
 
-st.set_page_config(page_title="LinkSus", page_icon="🛡️", layout="centered")
-st.title("LinkSus - Phishing URL Detector")
-st.caption("A Streamlit app for checking whether a URL looks phishing or safe.")
+st.set_page_config(
+    page_title="LinkSus — Cyber Defense Intelligence",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-url = st.text_input("Enter a URL to scan", placeholder="https://example.com")
+# Custom Clean White Background & Modern Theme
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
-if st.button("Check URL"):
-    if not url.strip():
-        st.warning("Please enter a URL.")
+    /* Clean white background & modern typography */
+    html, body, [data-testid="stAppViewContainer"], .stApp {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        background-image: none !important;
+    }
+
+    [data-testid="stHeader"] {
+        background-color: #ffffff !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+    }
+
+    [data-testid="stSidebar"] {
+        background-color: #f8fafc !important;
+        border-right: 1px solid #e2e8f0 !important;
+    }
+
+    [data-testid="stSidebar"] * {
+        color: #1e293b !important;
+    }
+
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+        color: #0f172a !important;
+    }
+
+    /* Headings & Text */
+    h1, h2, h3, h4, h5, h6, p, span, label {
+        color: #0f172a;
+    }
+
+    .brand-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        margin-bottom: 25px;
+        padding-top: 5px;
+    }
+
+    .brand-icon {
+        width: 52px;
+        height: 52px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        border: 1px solid rgba(37,99,235,0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        box-shadow: 0 8px 20px rgba(37,99,235,0.25);
+        margin-bottom: 12px;
+    }
+
+    .brand-title {
+        font-size: 36px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        background: linear-gradient(135deg, #0f172a 30%, #2563eb);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 0;
+    }
+
+    .brand-tagline {
+        font-size: 11px;
+        font-weight: 700;
+        color: #64748b !important;
+        letter-spacing: 1.8px;
+        text-transform: uppercase;
+        margin-top: 6px;
+    }
+
+    /* Verdict Cards */
+    .verdict-card {
+        padding: 22px 24px;
+        border-radius: 14px;
+        margin: 18px 0;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+    }
+
+    .verdict-safe {
+        background: #f0fdf4 !important;
+        border: 1.5px solid #86efac !important;
+        box-shadow: 0 6px 18px rgba(22,163,74,0.08);
+    }
+
+    .verdict-bad {
+        background: #fef2f2 !important;
+        border: 1.5px solid #fca5a5 !important;
+        box-shadow: 0 6px 18px rgba(220,38,38,0.08);
+    }
+
+    .verdict-heading {
+        font-size: 20px;
+        font-weight: 800;
+        margin: 0;
+    }
+
+    .verdict-safe .verdict-heading { color: #15803d !important; }
+    .verdict-bad .verdict-heading { color: #b91c1c !important; }
+
+    .verdict-safe .verdict-sub {
+        font-size: 13px;
+        color: #166534 !important;
+        margin-top: 4px;
+    }
+
+    .verdict-bad .verdict-sub {
+        font-size: 13px;
+        color: #991b1b !important;
+        margin-top: 4px;
+    }
+
+    /* Feature Pills */
+    .feature-pill-risk {
+        background: #fee2e2 !important;
+        color: #dc2626 !important;
+        border: 1px solid #fca5a5 !important;
+        padding: 3px 10px;
+        border-radius: 6px;
+        font-weight: 700;
+        font-size: 12px;
+    }
+
+    .feature-pill-safe {
+        background: #dcfce7 !important;
+        color: #15803d !important;
+        border: 1px solid #86efac !important;
+        padding: 3px 10px;
+        border-radius: 6px;
+        font-weight: 700;
+        font-size: 12px;
+    }
+
+    /* Gemini AI Container */
+    .gemini-container {
+        background: #f8fafc !important;
+        border: 1.5px solid #c7d2fe !important;
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin: 16px 0;
+        box-shadow: 0 4px 14px rgba(99,102,241,0.06);
+    }
+
+    .gemini-pill {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        background: #e0e7ff !important;
+        color: #4338ca !important;
+        border: 1px solid #c7d2fe !important;
+        padding: 2px 8px;
+        border-radius: 12px;
+        margin-bottom: 8px;
+    }
+
+    .gemini-body {
+        color: #334155 !important;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    /* Input styling */
+    div[data-baseweb="input"] {
+        background-color: #ffffff !important;
+        border: 1.5px solid #cbd5e1 !important;
+        border-radius: 10px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    div[data-baseweb="input"]:focus-within {
+        border-color: #2563eb !important;
+        box-shadow: 0 0 0 3px rgba(37,99,235,0.15) !important;
+    }
+
+    input[type="text"] {
+        font-family: 'JetBrains Mono', monospace !important;
+        color: #0f172a !important;
+        background-color: #ffffff !important;
+    }
+
+    input[type="text"]::placeholder {
+        color: #94a3b8 !important;
+    }
+
+    /* Buttons */
+    button[kind="primary"] {
+        background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 10px !important;
+        font-weight: 700 !important;
+        box-shadow: 0 4px 14px rgba(37,99,235,0.25) !important;
+    }
+
+    button[kind="primary"]:hover {
+        box-shadow: 0 6px 20px rgba(37,99,235,0.35) !important;
+    }
+
+    button[kind="secondary"] {
+        background-color: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        color: #334155 !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    button[kind="secondary"]:hover {
+        background-color: #f8fafc !important;
+        border-color: #cbd5e1 !important;
+        color: #0f172a !important;
+    }
+
+    /* Metrics Cards */
+    [data-testid="stMetric"] {
+        background-color: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 10px !important;
+        padding: 12px 16px !important;
+    }
+
+    [data-testid="stMetricValue"] {
+        color: #0f172a !important;
+        font-weight: 800 !important;
+    }
+
+    [data-testid="stMetricLabel"] {
+        color: #64748b !important;
+        font-weight: 600 !important;
+    }
+
+    code {
+        background-color: #f1f5f9 !important;
+        color: #0f172a !important;
+        border: 1px solid #e2e8f0 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Sidebar
+with st.sidebar:
+    st.markdown("### 🛡️ LinkSus Security Engine")
+    st.caption("Multilayer Phishing Detection & Explainability")
+    st.markdown("---")
+    st.markdown("**Active Pipeline:**")
+    st.markdown("- 🔍 **19 Lexical Heuristics** (Domain, Length, TLDs, Brand lookalikes)")
+    st.markdown("- 📊 **TF-IDF Vectorizer** (N-gram sub-patterns)")
+    st.markdown("- ⚡ **LinearSVC Model** (Hyperplane boundary)")
+    st.markdown("- 💡 **SHAP Explainability** (Linear feature attribution)")
+    st.markdown("- 🤖 **Gemini 2.5 AI** (Natural language synthesis)")
+    st.markdown("---")
+    st.markdown("**Chrome Extension:**")
+    st.info("Manifest V3 extension located in `extension/`. Connects to LinkSus backend for instant tab inspection.")
+
+# Main layout
+st.markdown(
+    """
+    <div class="brand-container">
+        <div class="brand-icon">🛡️</div>
+        <h1 class="brand-title">LinkSus</h1>
+        <div class="brand-tagline">Cyber Defense Intelligence // Phishing URL Detection</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Manage state for sample clicks
+if "input_url" not in st.session_state:
+    st.session_state.input_url = ""
+if "trigger_scan" not in st.session_state:
+    st.session_state.trigger_scan = False
+
+st.markdown("##### Quick Test Samples")
+col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+with col_s1:
+    if st.button("🌐 Google (Legitimate)", use_container_width=True):
+        st.session_state.input_url = "https://google.com"
+        st.session_state.trigger_scan = True
+with col_s2:
+    if st.button("💳 PayPal (Legitimate)", use_container_width=True):
+        st.session_state.input_url = "https://paypal.com"
+        st.session_state.trigger_scan = True
+with col_s3:
+    if st.button("⚠️ Phishing Scam URL", use_container_width=True):
+        st.session_state.input_url = "http://secure-login-verify-account-update.xyz/login"
+        st.session_state.trigger_scan = True
+with col_s4:
+    if st.button("🚨 Free-Host Abuse", use_container_width=True):
+        st.session_state.input_url = "https://account-security-alert.vercel.app"
+        st.session_state.trigger_scan = True
+
+# Main input form
+col_in, col_btn = st.columns([5, 1])
+with col_in:
+    url_val = st.text_input(
+        "Enter a URL to scan",
+        value=st.session_state.input_url,
+        placeholder="https://example.com/login",
+        label_visibility="collapsed",
+    )
+with col_btn:
+    scan_btn = st.button("Inspect URL", type="primary", use_container_width=True)
+
+should_run = scan_btn or st.session_state.trigger_scan
+st.session_state.trigger_scan = False
+
+if should_run:
+    target_url = url_val.strip()
+    if not target_url:
+        st.warning("Please enter or select a URL to inspect.")
     else:
-        prediction, explanation, gemini_text = smart_predict(url)
+        with st.spinner("Analyzing URL across heuristics, vectorizer, and ML models..."):
+            prediction, explanation, gemini_text, source = smart_predict(target_url, return_source=True)
 
         if prediction == "bad":
-            st.error("⚠️ Phishing Website Detected")
-        elif prediction == "good":
-            st.success("✅ Safe Website")
+            st.markdown(
+                f"""
+                <div class="verdict-card verdict-bad">
+                    <div style="font-size:36px; line-height:1;">⚠️</div>
+                    <div>
+                        <div class="verdict-heading">PHISHING THREAT DETECTED</div>
+                        <div class="verdict-sub">Flagged by: <strong>{source}</strong></div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
         else:
-            st.info(f"Prediction: {prediction}")
-
-        if explanation:
-            st.subheader("Why this result?")
-            st.dataframe(
-                [{"Feature": item["name"], "Value": item["value"], "SHAP": item["shap"], "Direction": item["direction"]}
-                 for item in explanation],
-                use_container_width=True,
-                hide_index=True,
+            st.markdown(
+                f"""
+                <div class="verdict-card verdict-safe">
+                    <div style="font-size:36px; line-height:1;">🛡️</div>
+                    <div>
+                        <div class="verdict-heading">LEGITIMATE WEBSITE VERIFIED</div>
+                        <div class="verdict-sub">Verified by: <strong>{source}</strong></div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
 
-        if gemini_text:
-            st.subheader("AI explanation")
-            st.write(gemini_text)
+        # Overview Metrics
+        m1, m2, m3 = st.columns(3)
+        with m1:
+            st.metric("Verdict", "PHISHING" if prediction == "bad" else "SAFE")
+        with m2:
+            st.metric("Detection Route", source.split()[0])
+        with m3:
+            st.metric("Evaluated Heuristics", f"{len(feature_names)} features")
 
-        if not explanation and not gemini_text:
-            st.info("Model analyzed the URL but did not return additional feature signals.")
+        # Explanations
+        if explanation:
+            st.markdown("#### 🔬 Key Feature Attribution (SHAP Signals)")
+            for item in explanation:
+                is_risk = item["direction"] == "phishing"
+                pill_class = "feature-pill-risk" if is_risk else "feature-pill-safe"
+                label_text = "⚠ Risk Factor" if is_risk else "✓ Safe Indicator"
+
+                c_name, c_val, c_shap, c_badge = st.columns([3, 2, 2, 2])
+                with c_name:
+                    st.markdown(f"**{item['name']}**")
+                with c_val:
+                    st.markdown(f"`Value: {item['value']}`")
+                with c_shap:
+                    st.markdown(f"`SHAP: {item['shap']:+.3f}`")
+                with c_badge:
+                    st.markdown(f'<span class="{pill_class}">{label_text}</span>', unsafe_allow_html=True)
+
+        # Gemini AI Explanation
+        if gemini_text:
+            st.markdown(
+                f"""
+                <div class="gemini-container">
+                    <span class="gemini-pill">✨ Gemini AI Security Assessment</span>
+                    <div class="gemini-body">{gemini_text}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        elif not gemini_client:
+            st.caption("💡 Set `GEMINI_API_KEY` in your `.env` file to enable automated Gemini AI security insights.")
 
 st.markdown("---")
-st.markdown("Example URLs: `https://google.com`, `https://paypal.com`, `https://secure-login-update-account.vercel.app`")
+st.caption("LinkSus — Explainable AI Phishing URL Detection // LinearSVC + SHAP + Google Gemini")
+
