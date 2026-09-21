@@ -1,143 +1,152 @@
-from flask import Flask, render_template, request, jsonify  # added jsonify
-from flask_cors import CORS                                  # added CORS
+import hashlib
+import os
 import pickle
 import re
-import numpy as np
-from scipy.sparse import hstack, csr_matrix
+from typing import Any
+
 import difflib
-import shap
-import os
+
+import numpy as np
+import streamlit as st
 from dotenv import load_dotenv
-import hashlib
-from google import genai
-from google.genai import types
+from scipy.sparse import hstack
+import shap
+
+try:
+    from google import genai
+    from google.genai import types
+except Exception:  # pragma: no cover - optional dependency for Gemini
+    genai = None
+    types = None
 
 load_dotenv()
 
-app = Flask(__name__)
-CORS(app)  # allows Chrome extension to call your Flask server
 
-# ===== LOAD FILES =====
-with open("vectorizernew.pkl", "rb") as f:
-    vectorizer = pickle.load(f)
+@st.cache_resource
+def load_model_assets():
+    with open("vectorizernew.pkl", "rb") as f:
+        vectorizer = pickle.load(f)
 
-with open("phishing_modelnew.pkl", "rb") as f:
-    model = pickle.load(f)
+    with open("phishing_modelnew.pkl", "rb") as f:
+        model = pickle.load(f)
 
-with open("scalernew.pkl", "rb") as f:
-    scaler = pickle.load(f)
+    with open("scalernew.pkl", "rb") as f:
+        scaler = pickle.load(f)
+
+    return vectorizer, model, scaler
 
 
-# ===== GEMINI SETUP =====
+vectorizer, model, scaler = load_model_assets()
+
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-if GEMINI_API_KEY:
+if GEMINI_API_KEY and genai is not None and types is not None:
     gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-    print("✅ Gemini API connected successfully.")
 else:
     gemini_client = None
-    print("⚠️  GEMINI_API_KEY not set — Gemini explanations will be disabled.")
 
+_gemini_cache: dict[str, str] = {}
 
-# ===== GEMINI RESPONSE CACHE =====
-_gemini_cache: dict = {}
-
-
-# ===== SAFE DOMAINS =====
 safe_domains = [
     "google.com", "amazon.com", "amazon.in", "amazon.co.uk",
     "paypal.com", "paypal.co.uk",
     "github.com", "facebook.com", "linkedin.com",
     "microsoft.com", "apple.com",
-    "zoom.us", "notion.so", "duckduckgo.com", "canva.com", "figma.com"
+    "zoom.us", "notion.so", "duckduckgo.com", "canva.com", "figma.com",
 ]
 
-# ===== FREE HOSTING DOMAINS USED FOR PHISHING =====
 SUSPICIOUS_FREE_HOSTS = [
-    'my3gb.com', 'freehosting.com', '000webhostapp.com', 'weebly.com',
-    'wixsite.com', 'blogspot.com', 'wordpress.com', 'netlify.app',
-    'glitch.me', 'replit.dev', 'vercel.app', 'web.app',
-    'firebaseapp.com', 'pages.dev', 'surge.sh'
+    "my3gb.com", "freehosting.com", "000webhostapp.com", "weebly.com",
+    "wixsite.com", "blogspot.com", "wordpress.com", "netlify.app",
+    "glitch.me", "replit.dev", "vercel.app", "web.app",
+    "firebaseapp.com", "pages.dev", "surge.sh",
 ]
 
-# ===== FEATURE NAMES =====
 feature_names = [
-    "URL Length","Dot Count","Hyphen Count","Digit Count",
-    "Contains 'login'","Contains 'secure'","Contains 'verify'",
-    "Contains 'account'","Contains 'update'","Excessive Dots (>4)",
-    "Contains '@'","Excessive Hyphens (>2)","Too Many Subdomains",
-    "Suspicious TLD (.xyz/.tk/.ml/.ga)","Lookalike Domain",
-    "Scam Word Count","Multiple Scam Words","Phishing Phrase Count",
-    "Contains Phishing Phrase"
+    "URL Length", "Dot Count", "Hyphen Count", "Digit Count",
+    "Contains 'login'", "Contains 'secure'", "Contains 'verify'",
+    "Contains 'account'", "Contains 'update'", "Excessive Dots (>4)",
+    "Contains '@'", "Excessive Hyphens (>2)", "Too Many Subdomains",
+    "Suspicious TLD (.xyz/.tk/.ml/.ga)", "Lookalike Domain",
+    "Scam Word Count", "Multiple Scam Words", "Phishing Phrase Count",
+    "Contains Phishing Phrase",
 ]
 
 CONTINUOUS_FEATURES = {
-    "URL Length","Dot Count","Hyphen Count",
-    "Digit Count","Scam Word Count","Phishing Phrase Count"
+    "URL Length", "Dot Count", "Hyphen Count",
+    "Digit Count", "Scam Word Count", "Phishing Phrase Count",
 }
 
 
-# ===== LOOKALIKE =====
 def is_lookalike(domain):
-    brands = ['google', 'amazon', 'paypal', 'facebook', 'microsoft', 'apple']
-    for b in brands:
-        ratio = difflib.SequenceMatcher(None, domain, b).ratio()
+    brands = ["google", "amazon", "paypal", "facebook", "microsoft", "apple"]
+    for brand in brands:
+        ratio = difflib.SequenceMatcher(None, domain, brand).ratio()
         if 0.70 < ratio < 1.0:
             return 1
     return 0
 
 
-# ===== FREE HOST CHECK =====
 def is_free_host(domain):
-    parts = domain.split('.')
+    parts = domain.split(".")
     if len(parts) >= 2:
-        root = '.'.join(parts[-2:])
+        root = ".".join(parts[-2:])
         if root in SUSPICIOUS_FREE_HOSTS:
             return True
     return False
 
 
-# ===== FEATURE EXTRACTION =====
 def extract_features(url):
     url = url.lower()
-    domain = url.split('/')[0]
-    parts = domain.split('.')
+    domain = url.split("/")[0]
+    parts = domain.split(".")
     base_domain = parts[0]
 
-    scam_words = ['free','money','win','prize','gift','bonus','offer','giveaway']
+    scam_words = ["free", "money", "win", "prize", "gift", "bonus", "offer", "giveaway"]
     scam_count = sum(word in url for word in scam_words)
 
     phrase_patterns = [
-        'account-verification','verification-required','user-verification',
-        'limited-offer','offer-free','free-subscription',
-        'confirm-account','update-details','login-support','security-alert'
+        "account-verification", "verification-required", "user-verification",
+        "limited-offer", "offer-free", "free-subscription",
+        "confirm-account", "update-details", "login-support", "security-alert",
     ]
     phrase_count = sum(p in url for p in phrase_patterns)
 
     return [
-        len(url),url.count('.'),url.count('-'),
+        len(url), url.count("."), url.count("-"),
         sum(c.isdigit() for c in url),
-        int('login' in url),int('secure' in url),
-        int('verify' in url),int('account' in url),
-        int('update' in url),int(url.count('.') > 4),
-        int('@' in url),int(url.count('-') > 2),
+        int("login" in url), int("secure" in url),
+        int("verify" in url), int("account" in url),
+        int("update" in url), int(url.count(".") > 4),
+        int("@" in url), int(url.count("-") > 2),
         int(len(parts) > 4),
-        int(domain.endswith(('.xyz','.tk','.ml','.ga'))),
+        int(domain.endswith((".xyz", ".tk", ".ml", ".ga"))),
         is_lookalike(base_domain),
-        scam_count,int(scam_count >= 2),
-        phrase_count,int(phrase_count >= 1)
+        scam_count, int(scam_count >= 2),
+        phrase_count, int(phrase_count >= 1),
     ]
 
 
-# ===== SHAP EXPLAINER SETUP =====
-n_tfidf_features = len(vectorizer.get_feature_names_out())
-n_handcrafted = len(feature_names)
-n_total = n_tfidf_features + n_handcrafted
+@st.cache_data
+def get_shap_explainer():
+    n_tfidf_features = len(vectorizer.get_feature_names_out())
+    n_handcrafted = len(feature_names)
+    n_total = n_tfidf_features + n_handcrafted
+    background = np.zeros((1, n_total))
+    return shap.LinearExplainer(model, background)
 
-background = np.zeros((1, n_total))
-explainer = shap.LinearExplainer(model, background)
+
+explainer = get_shap_explainer()
 
 
-# ===== SHAP EXPLANATION =====
+def make_item(name, shap_val, raw_val, direction):
+    return {
+        "name": name,
+        "shap": round(float(shap_val), 3),
+        "value": round(float(raw_val), 2),
+        "direction": direction,
+    }
+
+
 def get_shap_explanation(combined_input, url_features_raw, prediction):
     if hasattr(combined_input, "toarray"):
         combined_dense = combined_input.toarray()
@@ -145,13 +154,14 @@ def get_shap_explanation(combined_input, url_features_raw, prediction):
         combined_dense = np.array(combined_input)
 
     shap_values = explainer.shap_values(combined_dense)
-    handcrafted_shap = shap_values[0, -n_handcrafted:]
+    handcrafted_shap = shap_values[0, -len(feature_names):]
     show_direction = "phishing" if prediction == "bad" else "safe"
 
-    explanations = []
+    explanations: list[dict[str, Any]] = []
     for name, shap_val, raw_val in zip(feature_names, handcrafted_shap, url_features_raw[0]):
         if abs(shap_val) <= 0.01:
             continue
+
         is_continuous = name in CONTINUOUS_FEATURES
         if shap_val > 0:
             if show_direction != "phishing":
@@ -172,16 +182,6 @@ def get_shap_explanation(combined_input, url_features_raw, prediction):
     return explanations[:5]
 
 
-def make_item(name, shap_val, raw_val, direction):
-    return {
-        "name": name,
-        "shap": round(float(shap_val), 3),
-        "value": round(float(raw_val), 2),
-        "direction": direction
-    }
-
-
-# ===== GEMINI EXPLANATION =====
 def get_gemini_explanation(url, prediction, shap_signals, free_host=False):
     if not gemini_client:
         return None
@@ -196,15 +196,15 @@ def get_gemini_explanation(url, prediction, shap_signals, free_host=False):
         top_signals = shap_signals[:2]
         if top_signals:
             signals_text = ", ".join(
-                f"{s['name']} ({'Risk' if s['direction']=='phishing' else 'Safe'})"
-                for s in top_signals
+                f"{signal['name']} ({'Risk' if signal['direction'] == 'phishing' else 'Safe'})"
+                for signal in top_signals
             )
         else:
             signals_text = "free hosting" if free_host else "URL patterns"
 
         prompt = (
-            f'URL: {url} | Result: {verdict_text} | Flags: {signals_text}\n'
-            f'Explain in 2 sentences why it is {verdict_text}.'
+            f"URL: {url} | Result: {verdict_text} | Flags: {signals_text}\n"
+            f"Explain in 2 sentences why it is {verdict_text}."
         )
 
         response = gemini_client.models.generate_content(
@@ -212,31 +212,27 @@ def get_gemini_explanation(url, prediction, shap_signals, free_host=False):
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.3,
-                max_output_tokens=80
-            )
+                max_output_tokens=80,
+            ),
         )
 
         result = response.text.strip()
         _gemini_cache[cache_key] = result
         return result
-
     except Exception:
         return None
 
 
-# ===== PREDICT =====
 def smart_predict(url):
-    cleaned = re.sub(r'^https?://(www\.)?', '', url.lower())
-    domain = cleaned.split('/')[0]
+    cleaned = re.sub(r"^https?://(www\.)?", "", url.lower())
+    domain = cleaned.split("/")[0]
 
     for safe in safe_domains:
-        if domain == safe or domain.endswith('.' + safe):
-            gemini_text = get_gemini_explanation(url, "good", [])
-            return "good", [], gemini_text
+        if domain == safe or domain.endswith("." + safe):
+            return "good", [], get_gemini_explanation(url, "good", [])
 
     if is_free_host(domain):
-        gemini_text = get_gemini_explanation(url, "bad", [], True)
-        return "bad", [], gemini_text
+        return "bad", [], get_gemini_explanation(url, "bad", [], True)
 
     text_vec = vectorizer.transform([cleaned])
     url_feat_raw = np.array([extract_features(cleaned)])
@@ -250,58 +246,40 @@ def smart_predict(url):
     return prediction, shap_signals, gemini_text
 
 
-# ===== MAIN ROUTE (web app) =====
-@app.route("/", methods=["GET","POST"])
-def index():
-    result = None
-    explanation = []
-    gemini_text = None
-    url_input = ""
+st.set_page_config(page_title="LinkSus", page_icon="🛡️", layout="centered")
+st.title("LinkSus - Phishing URL Detector")
+st.caption("A Streamlit app for checking whether a URL looks phishing or safe.")
 
-    if request.method == "POST":
-        url = request.form["url"].strip()
-        url_input = url
+url = st.text_input("Enter a URL to scan", placeholder="https://example.com")
 
+if st.button("Check URL"):
+    if not url.strip():
+        st.warning("Please enter a URL.")
+    else:
         prediction, explanation, gemini_text = smart_predict(url)
 
         if prediction == "bad":
-            result = "⚠️ Phishing Website Detected"
+            st.error("⚠️ Phishing Website Detected")
+        elif prediction == "good":
+            st.success("✅ Safe Website")
         else:
-            result = "✅ Safe Website"
+            st.info(f"Prediction: {prediction}")
 
-    return render_template(
-        "index.html",
-        result=result,
-        explanation=explanation,
-        gemini_text=gemini_text,
-        url_input=url_input
-    )
+        if explanation:
+            st.subheader("Why this result?")
+            st.dataframe(
+                [{"Feature": item["name"], "Value": item["value"], "SHAP": item["shap"], "Direction": item["direction"]}
+                 for item in explanation],
+                use_container_width=True,
+                hide_index=True,
+            )
 
+        if gemini_text:
+            st.subheader("AI explanation")
+            st.write(gemini_text)
 
-# ===== API ROUTE (Chrome extension) =====
-@app.route("/api/check", methods=["POST"])
-def api_check():
-    """
-    JSON endpoint for the Chrome extension.
-    Receives: { "url": "https://example.com" }
-    Returns:  { "prediction": "good"/"bad", "explanation": [...], "gemini_text": "..." }
-    """
-    data = request.get_json()
-    if not data or "url" not in data:
-        return jsonify({"error": "No URL provided"}), 400
+        if not explanation and not gemini_text:
+            st.info("Model analyzed the URL but did not return additional feature signals.")
 
-    url = data["url"].strip()
-
-    try:
-        prediction, explanation, gemini_text = smart_predict(url)
-        return jsonify({
-            "prediction": prediction,
-            "explanation": explanation,
-            "gemini_text": gemini_text
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
+st.markdown("---")
+st.markdown("Example URLs: `https://google.com`, `https://paypal.com`, `https://secure-login-update-account.vercel.app`")

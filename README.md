@@ -1,21 +1,50 @@
 # LinkSus
 
-This project is configured as a GitHub Pages landing page.
+LinkSus is a phishing URL detection app built with Python, scikit-learn, SHAP, and Streamlit.
 
-## GitHub Pages setup
+## What this project does
 
-1. Create a GitHub repository named `harshii` under the `harshitha-codex` account.
-2. Push this project to the repository.
-3. Open the repository settings.
-4. Go to **Pages**.
-5. Set **Source** to **Deploy from a branch**.
-6. Select branch **main** and folder **/root**.
-7. Save.
+- Detects phishing URLs from user input
+- Uses handcrafted URL features and TF-IDF text features
+- Shows SHAP-based explanations for the final prediction
+- Can be deployed on Streamlit Cloud from GitHub
 
-Your site will be published at:
+## Local run
 
-https://harshitha-codex.github.io/harshii/
+```bash
+cd "c:\Users\Administrator\Downloads\core-20260920T171223Z-1-001\core"
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+streamlit run app.py
+```
 
-## Note
+Open the local URL shown in the terminal, usually:
 
-GitHub Pages only supports static files. The Python Flask detector in `app.py` will not run on GitHub Pages. This page is intended as the public landing page for the project.
+```text
+http://localhost:8501
+```
+
+## Deploy on GitHub + Streamlit Cloud
+
+1. Push this project to a GitHub repository.
+2. Go to https://share.streamlit.io
+3. Sign in with GitHub.
+4. Click "New app".
+5. Select the repository, branch, and set the main file to `app.py`.
+6. Click "Deploy".
+
+Your app will be available as a live Streamlit URL from the Streamlit Cloud dashboard.
+
+## Project files
+
+- `app.py` — Streamlit app
+- `phishing_modelnew.pkl` — trained model
+- `vectorizernew.pkl` — TF-IDF vectorizer
+- `scalernew.pkl` — feature scaler
+- `dataset/phishing_site_urls.csv` — sample data
+
+## Notes
+
+- This project is designed for Streamlit hosting, not GitHub Pages.
+- If you want Gemini explanations, set `GEMINI_API_KEY` in your environment or Streamlit secrets.
