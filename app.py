@@ -24,13 +24,14 @@ load_dotenv()
 
 @st.cache_resource
 def load_model_assets():
-    with open("vectorizernew.pkl", "rb") as f:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(base_dir, "vectorizernew.pkl"), "rb") as f:
         vectorizer = pickle.load(f)
 
-    with open("phishing_modelnew.pkl", "rb") as f:
+    with open(os.path.join(base_dir, "phishing_modelnew.pkl"), "rb") as f:
         model = pickle.load(f)
 
-    with open("scalernew.pkl", "rb") as f:
+    with open(os.path.join(base_dir, "scalernew.pkl"), "rb") as f:
         scaler = pickle.load(f)
 
     return vectorizer, model, scaler
